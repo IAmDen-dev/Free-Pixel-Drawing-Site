@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Art Editor</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .controls {
+            margin-bottom: 15px;
+        }
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            margin: 0 5px;
+            cursor: pointer;
+            background: #34495e;
+            color: white;
+            border: 1px solid #7f8c8d;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #415b76;
+        }
+        #export-btn {
+            background: #27ae60;
+            border-color: #2ecc71;
+        }
+        #export-btn:hover {
+            background: #2ecc71;
+        }
+        /* Container that locks drawing area to exactly 1000x1000 */
+        #canvas-container {
+            width: 1000px;
+            height: 1000px;
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        /* HTML5 Canvas set up for crisp pixel rendering */
+        #drawing-canvas {
+            background-color: #ffffff;
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        /* Overlay grid for pixel placement guidance */
+        #grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1000px;
+            height: 1000px;
+            pointer-events: none;
+            background-size: 10px 10px;
+            background-image:
+                linear-gradient(to right, rgba(0, 0, 0, 0.1) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+        }
+        
+        /* New Advanced Color Picker Panel */
+        .color-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 180px;
+            background: #1a252f;
+            border: 2px solid #fff;
+            border-radius: 6px;
+            padding: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            user-select: none;
+        }
+        .panel-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #bdc3c7;
+        }
+        .preview-box {
+            width: 100%;
+            height: 30px;
+            border-radius: 4px;
+            border: 1px solid #fff;
+            background-color: rgb(255, 0, 0);
+        }
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .color-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            outline: none;
+            cursor: pointer;
+        }
+        .color-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #333;
+            cursor: pointer;
+        }
+        /* Full-spectrum Hue Slider Background */
+        #hue-slider {
+            background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+        }
+        /* Dynamic Sliders Updated via JS */
+        #sat-slider { background: linear-gradient(to right, #808080, #ff0000); }
+        #light-slider { background: linear-gradient(to right, #000000, #ff0000, #ffffff); }
+        
+        #eyedropper-btn {
+            width: 100%;
+            margin: 5px 0 0 0;
+            padding: 8px;
+            font-size: 14px;
+            background: #e67e22;
+            border-color: #d35400;
+        }
+        #eyedropper-btn:hover {
+            background: #f39c12;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <button id="save-btn">Save Project</button>
+        <button id="load-btn">Load Project</button>
+        <button id="toggle-grid">Toggle Grid</button>
+        <button id="clear-btn">Clear</button>
+        <button id="export-btn">Export PNG</button>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="drawing-canvas" width="1000" height="1000"></canvas>
+        <div id="grid-overlay"></div>
+        
+        <div class="color-panel">
+            <div class="panel-label">Current Color</div>
+            <div class="preview-box" id="preview"></div>
+            
+            <div class="slider-group">
+                <div class="panel-label">Hue</div>
+                <input type="range" id="hue-slider" class="color-slider" min="0" max="360" value="0">
+            </div>
+            
+            <div class="slider-group">
+                <div class="panel-label">Saturation</div>
+                <input type="range" id="sat-slider" class="color-slider" min="0" max="100" value="100">
+            </div>
+            
+            <div class="slider-group">
+                <div class="panel-label">Lightness</div>
+                <input type="range" id="light-slider" class="color-slider" min="0" max="100" value="50">
+            </div>
+
+            <button id="eyedropper-btn">Sample Color 🧪</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawing-canvas');
+        const ctx = canvas.getContext('2d');
+        const grid = document.getElementById('grid-overlay');
+        
+        const saveBtn = document.getElementById('save-btn');
+        const loadBtn = document.getElementById('load-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const gridBtn = document.getElementById('toggle-grid');
+        const exportBtn = document.getElementById('export-btn');
+        const eyedropperBtn = document.getElementById('eyedropper-btn');
+
+        // Color Picker Elements
+        const hueSlider = document.getElementById('hue-slider');
+        const satSlider = document.getElementById('sat-slider');
+        const lightSlider = document.getElementById('light-slider');
+        const preview = document.getElementById('preview');
+
+        const PIXEL_SIZE = 10;
+        let isDrawing = false;
+        
+        // HSL State Variables
+        let currentHue = 0;
+        let currentSat = 100;
+        let currentLight = 50;
+        let currentColor = 'hsl(0, 100%, 50%)';
+
+        // Disable smoothing on initial setup
+        ctx.imageSmoothingEnabled = false;
+
+        // Helper function to convert RGB to HSL when sampling colors
+        function rgbToHsl(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+
+            if (max === min) {
+                h = s = 0; // achromatic
+            } else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+        }
+
+        // --- Color Engine Updates ---
+        function updateColor() {
+            currentHue = hueSlider.value;
+            currentSat = satSlider.value;
+            currentLight = lightSlider.value;
+
+            currentColor = `hsl(${currentHue}, ${currentSat}%, ${currentLight}%)`;
+            preview.style.backgroundColor = currentColor;
+
+            // Update slider background tracks for a smooth visual experience
+            satSlider.style.background = `linear-gradient(to right, hsl(${currentHue}, 0%, ${currentLight}%), hsl(${currentHue}, 100%, ${currentLight}%))`;
+            lightSlider.style.background = `linear-gradient(to right, #000, hsl(${currentHue}, ${currentSat}%, 50%), #fff)`;
+        }
+
+        // Attach event listeners to all color sliders
+        [hueSlider, satSlider, lightSlider].forEach(slider => {
+            slider.addEventListener('input', updateColor);
+        });
+
+        // --- Pixel Art Drawing Logic ---
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const gridX = Math.floor(x / PIXEL_SIZE) * PIXEL_SIZE;
+            const gridY = Math.floor(y / PIXEL_SIZE) * PIXEL_SIZE;
+
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = currentColor;
+            ctx.fillRect(gridX, gridY, PIXEL_SIZE, PIXEL_SIZE);
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            draw(e);
+        });
+
+        // --- Global Mouse Handlers ---
+        document.addEventListener('mousemove', (e) => {
+            if (isDrawing) draw(e);
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        // --- Interface Extras ---
+        gridBtn.addEventListener('click', () => {
+            grid.style.display = grid.style.display === 'none' ? 'block' : 'none';
+        });
+
+        clearBtn.addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        // --- Eyedropper Color Picker Tool ---
+        if (!window.EyeDropper) {
+            eyedropperBtn.style.display = 'none'; // Hide if browser doesn't support it
+        } else {
+            eyedropperBtn.addEventListener('click', async () => {
+                const eyeDropper = new EyeDropper();
+                try {
+                    const result = await eyeDropper.open();
+                    // Hex format hex token returned (#ffffff)
+                    const hex = result.sRGBHex;
+                    
+                    // Parse Hex to RGB
+                    const r = parseInt(hex.slice(1, 3), 16);
+                    const g = parseInt(hex.slice(3, 5), 16);
+                    const b = parseInt(hex.slice(5, 7), 16);
+                    
+                    // Convert to HSL and assign values to sliders
+                    const [h, s, l] = rgbToHsl(r, g, b);
+                    hueSlider.value = h;
+                    satSlider.value = s;
+                    lightSlider.value = l;
+                    
+                    updateColor();
+                } catch (e) {
+                    console.log("Color selection cancelled or failed.");
+                }
+            });
+        }
+
+        // --- Export PNG Logic ---
+        exportBtn.addEventListener('click', () => {
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'pixel-art.png';
+            link.href = dataUrl;
+            link.click();
+        });
+
+        // --- Save / Load Slot Logic ---
+        saveBtn.addEventListener('click', () => {
+            const projectData = {
+                image: canvas.toDataURL(),
+                hue: hueSlider.value,
+                sat: satSlider.value,
+                light: lightSlider.value
+            };
+            localStorage.setItem('pixel_art_project_slot', JSON.stringify(projectData));
+            alert('Pixel art project saved!');
+        });
+
+        loadBtn.addEventListener('click', () => {
+            const savedData = localStorage.getItem('pixel_art_project_slot');
+            if (savedData) {
+                const project = JSON.parse(savedData);
+                
+                // Restore slider values safely
+                hueSlider.value = project.hue || 0;
+                satSlider.value = project.sat !== undefined ? project.sat : 100;
+                lightSlider.value = project.light !== undefined ? project.light : 50;
+                updateColor();
+
+                const img = new Image();
+                img.onload = function() {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(img, 0, 0);
+                };
+                img.src = project.image;
+
+                alert('Pixel art project loaded!');
+            } else {
+                alert('No saved project found.');
+            }
+        });
+
+        // Initial paint execution for default slider states
+        updateColor();
+    </script>
+
+</body>
+</html>
